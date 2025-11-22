@@ -22,12 +22,14 @@ export class UIController {
     private customCharGroup: HTMLElement;
     private customChars: HTMLInputElement;
     private invertCheckbox: HTMLInputElement;
+    private steamCheckbox: HTMLInputElement;
     private generateBtn: HTMLButtonElement;
     private downloadBtn: HTMLButtonElement;
     private copyBtn: HTMLButtonElement;
     private resetBtn: HTMLButtonElement;
     private previewImage: HTMLImageElement;
     private asciiOutput: HTMLPreElement;
+    private steamNotice: HTMLElement | null;
 
     constructor(generator: AsciiArtGenerator) {
         this.generator = generator;
@@ -43,13 +45,30 @@ export class UIController {
         this.charsetSelect = this.getElement<HTMLSelectElement>('#charsetSelect');
         this.customCharGroup = this.getElementById('customCharGroup');
         this.customChars = this.getElement<HTMLInputElement>('#customChars');
-            this.invertCheckbox = this.getElement<HTMLInputElement>('#invertCheckbox');
+        this.invertCheckbox = this.getElement<HTMLInputElement>('#invertCheckbox');
+        this.steamCheckbox = this.getElement<HTMLInputElement>('#steamCheckbox');
         this.generateBtn = this.getElement<HTMLButtonElement>('#generateBtn');
         this.downloadBtn = this.getElement<HTMLButtonElement>('#downloadBtn');
         this.copyBtn = this.getElement<HTMLButtonElement>('#copyBtn');
         this.resetBtn = this.getElement<HTMLButtonElement>('#resetBtn');
-        this.previewImage = this.getElement<HTMLImageElement>('#previewImage');
-        this.asciiOutput = this.getElement<HTMLPreElement>('#asciiOutput');
+    this.previewImage = this.getElement<HTMLImageElement>('#previewImage');
+    this.asciiOutput = this.getElement<HTMLPreElement>('#asciiOutput');
+    // steamNotice is optional depending on HTML version; don't throw if missing
+    this.steamNotice = document.getElementById('steamNotice');
+    }
+
+    private showNotice(message: string): void {
+        if (this.steamNotice) {
+            this.steamNotice.textContent = message;
+            this.steamNotice.style.display = 'block';
+        }
+    }
+
+    private clearNotice(): void {
+        if (this.steamNotice) {
+            this.steamNotice.textContent = '';
+            this.steamNotice.style.display = 'none';
+        }
     }
 
     /**
@@ -67,16 +86,49 @@ export class UIController {
         // Control events
         this.widthSlider.addEventListener('input', (e) => this.handleWidthChange(e));
         this.widthInput.addEventListener('input', (e) => this.handleWidthChange(e));
-        this.charsetSelect.addEventListener('change', (e) => this.handleCharsetChange(e));
-        this.customChars.addEventListener('input', (e) => this.handleCustomCharsChange(e));
+    this.charsetSelect.addEventListener('change', (e) => this.handleCharsetChange(e));
+    this.customChars.addEventListener('input', (e) => this.handleCustomCharsChange(e));
+    // steam checkbox does not need an input listener for now
 
-        // Button events
+    // steam checkbox change: proactively adjust width if needed
+    this.steamCheckbox.addEventListener('change', () => this.handleSteamToggle());
+
+    // Button events
         this.generateBtn.addEventListener('click', () => this.generateAscii());
         this.downloadBtn.addEventListener('click', () => this.downloadAscii());
         this.copyBtn.addEventListener('click', () => this.copyToClipboard());
         this.resetBtn.addEventListener('click', () => this.reset());
         
         console.log('UI Controller initialized successfully');
+    }
+
+    /**
+     * When user toggles Steam checkbox, adjust the width slider/input proactively
+     * so the value reflects any automatic reduction needed to satisfy the byte cap.
+     */
+    private handleSteamToggle(): void {
+        if (!this.currentImageData) {
+            // No image yet — nothing to calculate
+            return;
+        }
+
+        // Only apply adjustment for Braille-related charsets
+        const charset = this.charsetSelect.value;
+        if (!(charset === 'default' || charset === 'braille')) return;
+
+        const requestedWidth = parseInt(this.widthInput.value, 10);
+        if (this.steamCheckbox.checked) {
+            try {
+                const adjusted = this.generator.calculateSteamAdjustedWidth(this.currentImageData, requestedWidth);
+                if (adjusted !== requestedWidth) {
+                    console.log(`Steam toggle: adjusting width from ${requestedWidth} -> ${adjusted}`);
+                    this.widthSlider.value = String(adjusted);
+                    this.widthInput.value = String(adjusted);
+                }
+            } catch (err) {
+                console.error('Failed to calculate adjusted width for Steam mode', err);
+            }
+        }
     }
 
     /**
@@ -106,6 +158,10 @@ export class UIController {
             console.log('File processed, showing controls');
             this.showControls();
             this.displayPreview(file);
+            // If steam checkbox is already checked, adjust width now that we have image data
+            if (this.steamCheckbox.checked) {
+                this.handleSteamToggle();
+            }
             console.log('Preview displayed');
         } catch (error) {
             alert('图片加载失败，请重试');
@@ -153,8 +209,38 @@ export class UIController {
         const target = e.target as HTMLInputElement;
         const value = target.value;
 
+        const requested = parseInt(value, 10);
+
+        // If Steam is enabled and we have an image and braille-related charset, validate increase
+        const charset = this.charsetSelect.value;
+        if (this.steamCheckbox.checked && this.currentImageData && (charset === 'default' || charset === 'braille')) {
+            try {
+                const allowed = this.generator.calculateSteamAdjustedWidth(this.currentImageData, requested);
+                if (allowed < requested) {
+                    // User tried to increase beyond allowed for Steam mode — block and notify (on-page)
+                    this.showNotice('当前为最大宽度，请取消勾选steam留言板模式后重试');
+                    this.widthSlider.value = String(allowed);
+                    this.widthInput.value = String(allowed);
+                    return;
+                } else {
+                    // valid — clear any prior notice
+                    this.clearNotice();
+                }
+            } catch (err) {
+                console.error('Failed to validate width for Steam mode', err);
+            }
+        }
+
         this.widthSlider.value = value;
         this.widthInput.value = value;
+
+        // If steam is enabled, re-evaluate adjusted width (re-sync)
+        if (this.steamCheckbox.checked) {
+            this.handleSteamToggle();
+        } else {
+            // clear any steam-related notice when steam is off
+            this.clearNotice();
+        }
     }
 
     /**
@@ -168,6 +254,11 @@ export class UIController {
             this.customCharGroup.style.display = 'block';
         } else {
             this.customCharGroup.style.display = 'none';
+        }
+
+        // If switching charset to a Braille-related one while Steam is checked, adjust width
+        if (this.steamCheckbox.checked) {
+            this.handleSteamToggle();
         }
     }
 
@@ -213,22 +304,49 @@ export class UIController {
             this.generateBtn.disabled = true;
             this.generateBtn.textContent = '生成中...';
 
-            const width = parseInt(this.widthInput.value, 10);
+            let width = parseInt(this.widthInput.value, 10);
             let charset = this.charsetSelect.value;
 
             if (charset === 'custom') {
                 charset = this.customChars.value || '⢠⢉⠾⠃⠈⠱⣞⡿';
             }
 
+            // Debug: show steam checkbox state
+            console.log('Steam checkbox:', this.steamCheckbox.checked);
+
+            // If steam is enabled and we have an image, pre-calc adjusted width and apply it
+            if (this.steamCheckbox.checked && this.currentImageData && (charset === 'default' || charset === 'braille')) {
+                try {
+                    const adjusted = this.generator.calculateSteamAdjustedWidth(this.currentImageData, width);
+                    console.log(`Pre-generation: calculateSteamAdjustedWidth returned ${adjusted} for requested ${width}`);
+                    if (adjusted !== width) {
+                        console.log(`Pre-generation: applying steam-adjusted width ${adjusted} (was ${width})`);
+                        width = adjusted;
+                        this.widthSlider.value = String(adjusted);
+                        this.widthInput.value = String(adjusted);
+                    }
+                } catch (err) {
+                    console.error('Failed to calculate steam adjusted width before generation', err);
+                }
+            }
+
             console.log('Options:', { width, charset, invert: this.invertCheckbox.checked });
             const options: GenerateOptions = {
                 width,
                 charset,
-                invert: this.invertCheckbox.checked
+                invert: this.invertCheckbox.checked,
+                steam: this.steamCheckbox.checked
             };
 
-            console.log('Calling generator...');
-            this.currentAsciiArt = this.generator.generateAscii(this.currentImageData, options);
+            console.log('Calling generator...', { width, steam: this.steamCheckbox.checked });
+            const result = this.generator.generateAscii(this.currentImageData, options);
+            // If generator adjusted the width (e.g., steam mode reduction), sync UI slider/input
+            if (result.adjustedWidth !== undefined && result.adjustedWidth !== width) {
+                console.log(`Generator adjusted width from ${width} to ${result.adjustedWidth}`);
+                this.widthSlider.value = String(result.adjustedWidth);
+                this.widthInput.value = String(result.adjustedWidth);
+            }
+            this.currentAsciiArt = result.ascii;
             console.log('ASCII generated, length:', this.currentAsciiArt.length);
             this.displayAscii();
             this.showActions();

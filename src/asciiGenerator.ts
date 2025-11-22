@@ -7,6 +7,7 @@ export interface GenerateOptions {
     width: number;
     charset: string;
     invert: boolean;
+    steam?: boolean;
 }
 
 // Dithering implementation - Floyd-Steinberg algorithm
@@ -86,29 +87,99 @@ export class AsciiArtGenerator {
     public generateAscii(
         imageData: ImageData,
         options: GenerateOptions
-    ): string {
-        const { charset, invert, width } = options;
-        
+    ): { ascii: string; adjustedWidth?: number } {
+        const { charset, invert, width, steam } = options;
+
         // For Braille mode, use 2×4 pixel blocks
         if (charset === 'default' || charset === 'braille') {
-            return this.generateBrailleAscii(imageData, invert, width);
+            const result = this.generateBrailleAscii(imageData, invert, width, !!steam);
+            // Debug: count characters (exclude newlines) and estimate bytes (3 bytes per Braille char)
+            const charCount = result.ascii.replace(/\n/g, '').length;
+            console.log(`DEBUG: generated chars=${charCount}, estBytes=${charCount * 3}`);
+            return result;
         }
 
         // For other charsets, use the traditional approach
-        return this.generateTraditionalAscii(imageData, options);
+        const ascii = this.generateTraditionalAscii(imageData, options);
+        // Debug: count characters (exclude newlines) and estimate bytes (approx 1 byte per char for simple ASCII)
+        const charCount = ascii.replace(/\n/g, '').length;
+        console.log(`DEBUG: generated chars=${charCount}, estBytes~${charCount}`);
+        return { ascii };
+    }
+
+    /**
+     * Calculate adjusted Braille char width to satisfy Steam byte limit (<1000 bytes).
+     * Returns the adjusted width (never below UI minimum of 5).
+     */
+    public calculateSteamAdjustedWidth(imageData: ImageData, targetCharWidth: number): number {
+        const imageWidth = imageData.width;
+        const imageHeight = imageData.height;
+        const aspectRatio = imageHeight / imageWidth;
+
+        const maxBytes = 999; // must be < 1000
+        const maxChars = Math.floor(maxBytes / 3);
+    const minCharWidth = 1;
+
+        let charWidth = targetCharWidth;
+        while (charWidth > minCharWidth) {
+            const pixelW = charWidth * 2;
+            const pixelH = Math.round(pixelW * aspectRatio);
+            const rows = Math.ceil(pixelH / 4);
+            const charCount = charWidth * rows;
+            if (charCount <= maxChars) break;
+            charWidth--;
+        }
+
+        return charWidth;
     }
 
     /**
      * Generate ASCII art using Braille characters with dithering
      * Each character represents a 2×4 pixel block
      */
-    private generateBrailleAscii(imageData: ImageData, invert: boolean, targetCharWidth: number): string {
+    private generateBrailleAscii(imageData: ImageData, invert: boolean, targetCharWidth: number, steam: boolean): { ascii: string; adjustedWidth?: number } {
         // Step 0: Resize image based on Braille character dimensions
         // Each Braille character represents a 2×4 pixel block
         const imageWidth = imageData.width;
         const imageHeight = imageData.height;
         const aspectRatio = imageHeight / imageWidth;
         
+        // If Steam mode is on, attempt to compute an adjusted width that satisfies the byte cap
+        let adjustedWidth: number | undefined;
+        if (steam) {
+            try {
+                // First try the helper which computes a reasonable reduction
+                adjustedWidth = this.calculateSteamAdjustedWidth(imageData, targetCharWidth);
+                if (adjustedWidth !== targetCharWidth) {
+                    console.log(`Steam mode: adjusted char width from ${targetCharWidth} -> ${adjustedWidth}`);
+                    targetCharWidth = adjustedWidth;
+                }
+
+                // As a stronger safeguard, iteratively reduce targetCharWidth until estimated charCount fits
+                const maxBytes = 999;
+                const maxChars = Math.floor(maxBytes / 3);
+                let charWidth = targetCharWidth;
+                let iter = 0;
+                while (iter < 200) {
+                    const pixelW = charWidth * 2;
+                    const pixelH = Math.round(pixelW * aspectRatio);
+                    const rows = Math.max(1, Math.ceil(pixelH / 4));
+                    const charCount = charWidth * rows;
+                    if (charCount <= maxChars) break;
+                    charWidth = Math.max(1, charWidth - 1);
+                    iter++;
+                }
+
+                if (charWidth !== targetCharWidth) {
+                    console.log(`Steam safeguard: reduced char width from ${targetCharWidth} -> ${charWidth} after ${iter} iterations`);
+                    targetCharWidth = charWidth;
+                    adjustedWidth = charWidth;
+                }
+            } catch (err) {
+                console.error('Error calculating steam adjusted width', err);
+            }
+        }
+
         // targetCharWidth = number of Braille characters in one row
         // Each character is 2 pixels wide, 4 pixels tall
         // So actual pixel dimensions:
@@ -190,7 +261,34 @@ export class AsciiArtGenerator {
             ascii += '\n';
         }
 
-        return ascii;
+        // If steam mode is enabled, ensure final byte size < 1000 by truncating rows if necessary
+        if (steam) {
+            const maxBytes = 999;
+            const maxChars = Math.floor(maxBytes / 3);
+
+            // Split into lines and count printable Braille characters (exclude newline)
+            let lines = ascii.split('\n');
+            // Remove possible trailing empty line from split
+            if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+
+            let totalChars = lines.reduce((s, l) => s + l.length, 0);
+
+            // If still over the limit, remove lines from the end until it fits
+            while (totalChars > maxChars && lines.length > 0) {
+                const removed = lines.pop();
+                totalChars = lines.reduce((s, l) => s + l.length, 0);
+            }
+
+            ascii = lines.join('\n') + (lines.length > 0 ? '\n' : '');
+
+            // If we truncated lines, log it and return adjustedWidth so UI can reflect the change
+            if (totalChars > maxChars) {
+                // As a last resort, if even removing all lines didn't help (very unlikely), empty the output
+                ascii = '';
+            }
+        }
+
+        return { ascii, adjustedWidth: adjustedWidth !== undefined ? adjustedWidth : targetCharWidth };
     }
 
     /**

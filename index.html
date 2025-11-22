@@ -9,8 +9,16 @@
 <body>
     <div class="container">
         <header>
-            <h1>🎨 ASCII Art 生成器</h1>
-            <p>将你的图片转换为ASCII艺术</p>
+            <h1>🌆ASCII Art 生成器</h1>
+            <p>将你的图片转换为字符画</p>
+            <div class="header-images">
+                <img src="src/assets/c1.png" alt="decoration" class="header-img">
+                <img src="src/assets/c2.png" alt="decoration" class="header-img">
+                <img src="src/assets/h1.png" alt="decoration" class="header-img">
+                <img src="src/assets/h2.png" alt="decoration" class="header-img">
+                <img src="src/assets/d1.png" alt="decoration" class="header-img">
+                <img src="src/assets/d2.png" alt="decoration" class="header-img">
+            </div>
         </header>
 
         <main>
@@ -37,19 +45,19 @@
                         <input 
                             type="range" 
                             id="widthSlider" 
-                            min="5" 
+                            min="1" 
                             max="60" 
                             value="30"
                         >
                         <input 
                             type="number" 
                             id="widthInput" 
-                            min="5" 
+                            min="1" 
                             max="60" 
                             value="30"
                         >
                     </div>
-                    <span class="hint">20 - 200 字符</span>
+                    <span class="hint">1 - 60 字符宽度</span>
                 </div>
 
                 <div class="control-group">
@@ -79,6 +87,13 @@
                     </label>
                 </div>
 
+                <div class="control-group">
+                    <label>
+                        <input type="checkbox" id="steamCheckbox">
+                        用于steam留言板
+                    </label>
+                </div>
+                <div id="steamNotice" class="notice" style="display:none; color:#b71c1c; margin:6px 0; font-size:0.95rem;"></div>
                 <button id="generateBtn" class="btn-primary">生成 ASCII Art</button>
             </div>
 
@@ -94,8 +109,8 @@
             </div>
 
             <div class="actions-section" id="actionsSection" style="display: none;">
-                <button id="downloadBtn" class="btn-secondary">📥 下载为 TXT</button>
                 <button id="copyBtn" class="btn-secondary">📋 复制到剪贴板</button>
+                <button id="downloadBtn" class="btn-secondary">📥 下载为 TXT</button>
                 <button id="resetBtn" class="btn-secondary">🔄 重新开始</button>
             </div>
         </main>
