@@ -24,18 +24,10 @@ jobs:
       - name: Build TypeScript
         run: npx tsc
 
-      - name: Copy index.html
-        run: cp index.html dist/index.html
-
-      - name: Copy static assets
-        run: |
-          cp -r styles dist/styles
-          cp -r assets dist/assets
-
-      - name: Upload dist folder
+      - name: Upload public folder
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: public
 
   deploy:
     needs: build

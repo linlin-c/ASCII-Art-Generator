@@ -34,7 +34,7 @@ npx tsc
 ### 启动本地服务器
 
 ```bash
-python -m http.server 8000
+python -m http.server 8000 --directory public
 ```
 
 ### 访问应用
