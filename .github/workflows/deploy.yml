@@ -30,7 +30,7 @@ jobs:
       - name: Copy static assets
         run: |
           cp -r styles dist/styles
-          cp -r src/assets dist/assets
+          cp -r assets dist/assets
 
       - name: Upload dist folder
         uses: actions/upload-pages-artifact@v3
