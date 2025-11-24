@@ -24,6 +24,9 @@ jobs:
       - name: Build TypeScript
         run: npx tsc
 
+      - name: Copy index.html
+        run: cp index.html dist/index.html
+
       - name: Upload dist folder
         uses: actions/upload-pages-artifact@v3
         with:
