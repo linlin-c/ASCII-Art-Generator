@@ -27,6 +27,11 @@ jobs:
       - name: Copy index.html
         run: cp index.html dist/index.html
 
+      - name: Copy static assets
+        run: |
+          cp -r styles dist/styles
+          cp -r src/assets dist/src/assets
+
       - name: Upload dist folder
         uses: actions/upload-pages-artifact@v3
         with:
