@@ -14,7 +14,7 @@ ASCIIart-generator是一个轻量级的前端项目，用户上传图片（支�
    - steam留言板模式（将自动生成<1000个字节的字符）
 
 ## 在线版
-已发布GitHub Pages[ASCII Art生成器](https://linlin-c.github.io/ASCII-Art-Generator/)
+已发布GitHub Pages：[ASCII Art生成器](https://linlin-c.github.io/ASCII-Art-Generator/)
 
 ## 快速开始
 ### 安装依赖
